@@ -11,7 +11,6 @@ export const fetchAllMembers = async () => {
 };
 
 export const postAction = async (payload) => {
-  // Paksa WA jadi string biar JSON.stringify nggak ngubah jadi int
   const safePayload = {
     ...payload,
     wa: payload.wa ? String(payload.wa) : undefined,
@@ -32,5 +31,13 @@ export const editMember = async (oldWa, newNama, newWa) => {
     oldWa: oldWa,
     newNama: newNama,
     newWa: newWa,
+  });
+};
+
+export const addMember = async (nama, wa) => {
+  return await postAction({
+    action: "addMember",
+    nama: nama,
+    wa: wa,
   });
 };

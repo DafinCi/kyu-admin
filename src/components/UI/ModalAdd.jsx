@@ -1,39 +1,26 @@
 import React, { useState } from "react";
-import { X, Save, Loader2, AlertCircle } from "lucide-react";
-import { addMember } from "../../api/adminApi"; // Sesuaikan path API lu
+import { X, Save, AlertCircle } from "lucide-react";
 
-export default function ModalAdd({ members, onClose, onSuccess }) {
+export default function ModalAdd({ members, onClose, onAdd }) {
   const [name, setName] = useState("");
   const [wa, setWa] = useState("");
-  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMsg("");
 
-    // ⚡ 1. Pengecekan Duplikat Super Cepat (Client-Side)
     const formattedWa = wa.replace(/[^0-9]/g, "");
     const isDuplicate = members.some((m) => m.wa === formattedWa);
 
     if (isDuplicate) {
       setErrorMsg("Nomor WA ini sudah terdaftar di sistem!");
-      return; // Stop proses, jangan kirim ke server
+      return;
     }
 
-    // 2. Lanjut kirim ke server jika aman
-    setLoading(true);
-    try {
-      const res = await addMember(name, formattedWa);
-      if (res.status === "success") {
-        onSuccess();
-        onClose();
-      }
-    } catch (err) {
-      setErrorMsg("Gagal menyimpan data. Cek koneksi internet.");
-    } finally {
-      setLoading(false);
-    }
+    // ⚡ Langsung lempar ke parent (Dashboard) trus nutup modal instan!
+    onAdd({ nama: name, wa: formattedWa });
+    onClose();
   };
 
   return (
@@ -49,7 +36,6 @@ export default function ModalAdd({ members, onClose, onSuccess }) {
           </button>
         </div>
 
-        {/* Notifikasi Error jika Duplikat */}
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2 border border-red-100">
             <AlertCircle size={14} /> {errorMsg}
@@ -72,22 +58,16 @@ export default function ModalAdd({ members, onClose, onSuccess }) {
             onChange={(e) => {
               const onlyNumbers = e.target.value.replace(/[^0-9]/g, "");
               setWa(onlyNumbers);
-              setErrorMsg(""); // Hapus error kalau user mulai ngetik lagi
+              setErrorMsg("");
             }}
             className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all"
             placeholder="Nomor WA (Cth: 0812345678)"
           />
           <button
-            disabled={loading || !name || !wa}
+            disabled={!name || !wa}
             className="w-full bg-blue-600 disabled:bg-blue-300 text-white p-4 rounded-2xl font-bold flex justify-center items-center gap-2 shadow-md hover:bg-blue-700 transition-all active:scale-95"
           >
-            {loading ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <>
-                <Save size={18} /> Simpan Data
-              </>
-            )}
+            <Save size={18} /> Simpan Data
           </button>
         </form>
       </div>

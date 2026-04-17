@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import * as api from "../api/adminApi";
 import Navbar from "../components/Layout/Navbar";
-import MemberListItem from "../components/Member/MemberListItem"; // Nama komponen diganti
+import MemberListItem from "../components/Member/MemberListItem";
 import ModalAdd from "../components/UI/ModalAdd";
 import ModalEdit from "../components/UI/ModalEdit";
 import Loader from "../components/UI/Loader";
@@ -21,7 +21,6 @@ export default function Dashboard({ onLogout }) {
   const [modalType, setModalType] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
 
-  // 1. Initial Load (Hanya dipanggil sekali saat buka aplikasi / tambah / hapus)
   useEffect(() => {
     loadData();
   }, []);
@@ -38,54 +37,85 @@ export default function Dashboard({ onLogout }) {
     }
   };
 
-  // ⚡ 2. THE OPTIMISTIC UPDATE LOGIC (Super Cepat, Tanpa Loading)
   const handleUpdatePoint = async (wa, currentPoint, isReady) => {
     if (isReady && !confirm("Yakin mau klaim reward dan reset poin ke 0?"))
       return;
-
     const newPoint = isReady ? 0 : currentPoint + 1;
-
-    // A. Simpan data lama buat jaga-jaga kalau internet putus (Rollback)
     const previousMembers = [...members];
 
-    // B. Ubah UI secara instan! Tanpa nunggu respon server
     setMembers((prev) =>
       prev.map((m) => (m.wa === wa ? { ...m, poin: newPoint } : m)),
     );
-
-    // C. Getar dikit di HP (Haptic Feedback) biar ada sensasi "klik"
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
+    if (typeof navigator !== "undefined" && navigator.vibrate)
       navigator.vibrate(50);
-    }
 
-    // D. Kirim ke Google Sheets di background
     try {
       await api.postAction({ action: "updatePoint", wa, newPoint });
-      // Berhasil? Yaudah diam aja, UI udah berubah duluan.
     } catch (error) {
-      // E. Kalau server gagal, kembalikan ke angka semula!
-      console.error(error);
       setMembers(previousMembers);
       alert("⚠️ Gagal update poin! Cek koneksi internet.");
     }
   };
 
-  // Delete & Add tetap pakai loadData() untuk memastikan urutan data aman
   const handleDelete = async (wa, nama) => {
     if (!confirm(`Hapus data ${nama} permanen?`)) return;
+    const previousMembers = [...members];
+    setMembers((prev) => prev.filter((m) => m.wa !== wa));
     try {
       await api.postAction({ action: "deleteMember", wa });
-      loadData();
     } catch (error) {
-      alert("Gagal menghapus data.");
+      setMembers(previousMembers);
+      alert("⚠️ Gagal menghapus data! Cek koneksi internet.");
     }
   };
 
-  const filteredMembers = members.filter(
-    (m) =>
-      (m.wa?.toString() || "").includes(search) ||
-      (m.nama?.toLowerCase() || "").includes(search.toLowerCase()),
-  );
+  const handleAddMember = async (newMember) => {
+    const previousMembers = [...members];
+    const memberToInsert = { nama: newMember.nama, wa: newMember.wa, poin: 0 };
+    setMembers((prev) => [memberToInsert, ...prev]);
+    try {
+      await api.addMember(newMember.nama, newMember.wa);
+    } catch (error) {
+      setMembers(previousMembers);
+      alert("⚠️ Gagal menambah data! Cek koneksi internet.");
+    }
+  };
+
+  const handleEditMember = async (oldWa, newNama, newWa) => {
+    const previousMembers = [...members];
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.wa === oldWa ? { ...m, nama: newNama, wa: newWa } : m,
+      ),
+    );
+    try {
+      await api.editMember(oldWa, newNama, newWa);
+    } catch (error) {
+      setMembers(previousMembers);
+      alert("⚠️ Gagal mengedit data! Cek koneksi internet.");
+    }
+  };
+
+  const filteredMembers = members
+    .filter(
+      (m) =>
+        (m.wa?.toString() || "").includes(search) ||
+        (m.nama?.toLowerCase() || "").includes(search.toLowerCase()),
+    )
+    .sort((a, b) => b.poin - a.poin);
+
+  const sendWhatsAppNotif = (nama, wa, poin) => {
+    let message = "";
+    if (poin >= 9) {
+      message = `Halo Kak *${nama}*! \n\nAda kabar luar biasa dari *Kyu Services*! \n\nLoyalitas Kakak emang juara! Poin Kakak sudah mencapai *${poin} poin*. Sesuai janji kami, Kakak berhak mendapatkan *REWARD SPESIAL GRATIS* sebagai tanda terima kasih kami! \n\nSilakan datang ke outlet dan tunjukkan chat ini ke admin kami untuk klaim hadiahnya ya. Kami tunggu kehadirannya! \n\n_Kyu Services - Memberikan yang Terbaik untuk Anda_`;
+    } else {
+      const sisa = 9 - poin;
+      message = `Halo Kak *${nama}*! \n\nCuma mau kasih info seru nih, poin *Kyu Services* Kakak sekarang sudah terkumpul *${poin} poin*. \n\nKurang *${sisa} poin* lagi, Kakak bisa langsung klaim *REWARD MENARIK* dari kami! Jangan sampai hangus ya Kak. Sampai jumpa di kunjungan berikutnya! `;
+    }
+    const encodedMsg = encodeURIComponent(message);
+    const waUrl = `https://wa.me/${wa.replace(/^0/, "62")}?text=${encodedMsg}`;
+    window.open(waUrl, "_blank");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -96,7 +126,7 @@ export default function Dashboard({ onLogout }) {
           <Loader text="SINKRONISASI DATA..." />
         ) : (
           <>
-            {/* 📱 MOBILE VIEW: Compact List View (Hemat Layar) */}
+            {/* 📱 MOBILE VIEW */}
             <div className="md:hidden bg-white border-y border-slate-200">
               {filteredMembers.map((m, i) => (
                 <MemberListItem
@@ -108,6 +138,7 @@ export default function Dashboard({ onLogout }) {
                     setSelectedMember(m);
                     setModalType("edit");
                   }}
+                  onSendWA={() => sendWhatsAppNotif(m.nama, m.wa, m.poin)}
                 />
               ))}
               {filteredMembers.length === 0 && (
@@ -117,9 +148,8 @@ export default function Dashboard({ onLogout }) {
               )}
             </div>
 
-            {/* 💻 DESKTOP VIEW: Data Table Tetap Sama */}
+            {/* 💻 DESKTOP VIEW */}
             <div className="hidden md:block bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-              {/* ... (Isi table persis sama seperti diskusi sebelumnya) ... */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -151,18 +181,19 @@ export default function Dashboard({ onLogout }) {
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <a
-                              href={`https://wa.me/${m.wa.replace(/^0/, "62")}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-emerald-600 transition-colors"
+                            {/* ⚡ UBAH <a> JADI <button> BIAR RAPI */}
+                            <button
+                              onClick={() =>
+                                sendWhatsAppNotif(m.nama, m.wa, m.poin)
+                              }
+                              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer text-left"
                             >
                               <MessageCircle size={14} /> {m.wa}
-                            </a>
+                            </button>
                           </td>
                           <td className="px-6 py-4 text-center">
                             <span
-                              className={`inline-flex w-8 h-8 items-center justify-center rounded-full font-black text-sm ${isReady ? "bg-emerald-500 text-white" : "bg-blue-100 text-blue-700"}`}
+                              className={`inline-flex w-8 h-8 items-center justify-center rounded-full font-black text-sm ${isReady ? "bg-emerald-500 text-white shadow-md" : "bg-blue-100 text-blue-700"}`}
                             >
                               {m.poin}
                             </span>
@@ -174,13 +205,15 @@ export default function Dashboard({ onLogout }) {
                                   setSelectedMember(m);
                                   setModalType("edit");
                                 }}
-                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Edit"
                               >
                                 <Edit3 size={16} />
                               </button>
                               <button
                                 onClick={() => handleDelete(m.wa, m.nama)}
-                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                title="Hapus"
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -189,7 +222,7 @@ export default function Dashboard({ onLogout }) {
                                 onClick={() =>
                                   handleUpdatePoint(m.wa, m.poin, isReady)
                                 }
-                                className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all min-w-[110px] ${isReady ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-900 text-white hover:bg-slate-800"}`}
+                                className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all min-w-[110px] ${isReady ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-900 text-white hover:bg-slate-800"}`}
                               >
                                 {isReady ? (
                                   "Klaim Reward"
@@ -212,7 +245,6 @@ export default function Dashboard({ onLogout }) {
         )}
       </main>
 
-      {/* FAB Buat Tambah User */}
       <button
         onClick={() => setModalType("add")}
         className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg hover:scale-105 transition-all flex items-center justify-center z-40"
@@ -224,14 +256,15 @@ export default function Dashboard({ onLogout }) {
         <ModalAdd
           members={members}
           onClose={() => setModalType(null)}
-          onSuccess={loadData}
+          onAdd={handleAddMember}
         />
       )}
       {modalType === "edit" && (
         <ModalEdit
           member={selectedMember}
+          members={members}
           onClose={() => setModalType(null)}
-          onSuccess={loadData}
+          onEdit={handleEditMember}
         />
       )}
     </div>

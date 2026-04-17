@@ -1,36 +1,59 @@
 import React, { useState } from "react";
-import { X, Save, Loader2 } from "lucide-react";
-import { editMember } from "../../api/adminApi";
+import { X, Save, AlertCircle } from "lucide-react";
 
-export default function ModalEdit({ member, onClose, onSuccess }) {
+export default function ModalEdit({ member, members, onClose, onEdit }) {
   const [name, setName] = useState(member.nama);
   const [wa, setWa] = useState(member.wa);
-  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await editMember(member.wa, name, wa);
-      if (res.status === "success") {
-        onSuccess();
-        onClose();
+    setErrorMsg("");
+
+    const formattedWa = wa.replace(/[^0-9]/g, "");
+
+    // Cek duplikat HANYA JIKA nomor WA-nya diubah
+    if (formattedWa !== member.wa) {
+      const isDuplicate = members.some((m) => m.wa === formattedWa);
+      if (isDuplicate) {
+        setErrorMsg("Nomor WA ini sudah terpakai oleh member lain!");
+        return;
       }
-    } finally {
-      setLoading(false);
     }
+
+    // ⚡ Langsung lempar ke parent (Dashboard) trus nutup modal instan!
+    onEdit(member.wa, name, formattedWa);
+    onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
-        <h2 className="text-xl font-black mb-6">Edit Data Member</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-black text-slate-800">
+            Edit Data Member
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2 border border-red-100">
+            <AlertCircle size={14} /> {errorMsg}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
-            className="w-full bg-slate-50 p-4 rounded-2xl border focus:ring-2 focus:ring-blue-500"
+            required
+            className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Nama"
+            placeholder="Nama Pelanggan"
           />
           <input
             type="text"
@@ -40,31 +63,18 @@ export default function ModalEdit({ member, onClose, onSuccess }) {
             onChange={(e) => {
               const onlyNumbers = e.target.value.replace(/[^0-9]/g, "");
               setWa(onlyNumbers);
+              setErrorMsg("");
             }}
-            className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 px-5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            placeholder="Cth: 0812345678"
+            className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all"
+            placeholder="Nomor WA (Cth: 0812345678)"
           />
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-4 font-bold text-slate-500"
-            >
-              Batal
-            </button>
-            <button
-              disabled={loading}
-              className="flex-2 bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-2"
-            >
-              {loading ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  <Save size={18} /> Simpan
-                </>
-              )}
-            </button>
-          </div>
+
+          <button
+            disabled={!name || !wa}
+            className="w-full bg-blue-600 disabled:bg-blue-300 text-white p-4 rounded-2xl font-bold flex justify-center items-center gap-2 shadow-md hover:bg-blue-700 transition-all active:scale-95"
+          >
+            <Save size={18} /> Update Data
+          </button>
         </form>
       </div>
     </div>

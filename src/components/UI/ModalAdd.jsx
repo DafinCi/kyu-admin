@@ -1,32 +1,36 @@
 import React, { useState } from "react";
-import { X, UserPlus, Loader2 } from "lucide-react";
-import { postAction } from "../../api/adminApi";
+import { X, Save, Loader2, AlertCircle } from "lucide-react";
+import { addMember } from "../../api/adminApi"; // Sesuaikan path API lu
 
-export default function ModalAdd({ onClose, onSuccess, setGlobalLoading }) {
+export default function ModalAdd({ members, onClose, onSuccess }) {
   const [name, setName] = useState("");
   const [wa, setWa] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name || !wa) return alert("Isi semua data dulu bro!");
+    setErrorMsg("");
 
+    // ⚡ 1. Pengecekan Duplikat Super Cepat (Client-Side)
+    const formattedWa = wa.replace(/[^0-9]/g, "");
+    const isDuplicate = members.some((m) => m.wa === formattedWa);
+
+    if (isDuplicate) {
+      setErrorMsg("Nomor WA ini sudah terdaftar di sistem!");
+      return; // Stop proses, jangan kirim ke server
+    }
+
+    // 2. Lanjut kirim ke server jika aman
     setLoading(true);
     try {
-      const res = await postAction({
-        action: "addMember",
-        nama: name,
-        wa: wa,
-      });
-
+      const res = await addMember(name, formattedWa);
       if (res.status === "success") {
-        onSuccess(); // Refresh data di App.jsx
-        onClose(); // Tutup modal
-      } else {
-        alert(res.message);
+        onSuccess();
+        onClose();
       }
     } catch (err) {
-      alert("Gagal koneksi ke server.");
+      setErrorMsg("Gagal menyimpan data. Cek koneksi internet.");
     } finally {
       setLoading(false);
     }
@@ -34,61 +38,54 @@ export default function ModalAdd({ onClose, onSuccess, setGlobalLoading }) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl relative animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <button
-          onClick={onClose}
-          className="absolute top-6 right-6 text-slate-400 hover:text-slate-700 bg-slate-100 p-2 rounded-full transition-colors"
-        >
-          <X size={18} />
-        </button>
-
-        <h2 className="text-xl font-black text-slate-800 mb-1">Member Baru</h2>
-        <p className="text-xs text-slate-500 mb-8 font-medium">
-          Daftarkan pelanggan ke sistem Kyu.
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-2 px-1">
-              Nama Lengkap
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 px-5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none focus:bg-white transition-all"
-              placeholder="Cth: Ahmad Zaelani"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-2 px-1">
-              Nomor WhatsApp
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              required
-              value={wa}
-              onChange={(e) => {
-                const onlyNumbers = e.target.value.replace(/[^0-9]/g, "");
-                setWa(onlyNumbers);
-              }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 px-5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none focus:bg-white transition-all"
-              placeholder="0812xxxx"
-            />
-          </div>
-
+      <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-black text-slate-800">Tambah Member</h2>
           <button
-            disabled={loading}
-            type="submit"
-            className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold flex justify-center items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-100"
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Notifikasi Error jika Duplikat */}
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2 border border-red-100">
+            <AlertCircle size={14} /> {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            required
+            className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nama Pelanggan"
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            required
+            value={wa}
+            onChange={(e) => {
+              const onlyNumbers = e.target.value.replace(/[^0-9]/g, "");
+              setWa(onlyNumbers);
+              setErrorMsg(""); // Hapus error kalau user mulai ngetik lagi
+            }}
+            className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all"
+            placeholder="Nomor WA (Cth: 0812345678)"
+          />
+          <button
+            disabled={loading || !name || !wa}
+            className="w-full bg-blue-600 disabled:bg-blue-300 text-white p-4 rounded-2xl font-bold flex justify-center items-center gap-2 shadow-md hover:bg-blue-700 transition-all active:scale-95"
           >
             {loading ? (
-              <Loader2 size={20} className="animate-spin" />
+              <Loader2 size={18} className="animate-spin" />
             ) : (
               <>
-                <UserPlus size={18} /> Simpan Member
+                <Save size={18} /> Simpan Data
               </>
             )}
           </button>
